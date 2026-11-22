@@ -24,7 +24,7 @@ port = 54323
 api_url = "http://127.0.0.1"
 
 # ローカルで送信されたメールは http://127.0.0.1:54324 で確認できます
-[inbucket]
+[local_smtp]
 enabled = true
 port = 54324
 

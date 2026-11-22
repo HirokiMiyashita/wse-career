@@ -24,7 +24,8 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # latest だと CLI の更新で突然失敗することがあるため固定する
+          version: 3.2.0
 
       - name: Link Supabase project
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
