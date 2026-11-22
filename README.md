@@ -94,7 +94,7 @@ npm run dev
 
 | パス | 認証 | 説明 |
 | --- | --- | --- |
-| `/` | 不要 | LP（`src/app/(marketing)`） |
+| `/` | 不要 | ログイン済みなら `/dashboard`、未ログインなら `/login` へ移動（`src/app/page.tsx`） |
 | `/login` `/signup` | 不要 | 認証画面（`src/app/(auth)`）。ログイン済みなら `/dashboard` へ |
 | `/signup/verify` | 不要 | 確認メール送信完了 |
 | `/auth/callback` | — | 確認メールのリンクからの戻り先。code をセッションに交換 |
