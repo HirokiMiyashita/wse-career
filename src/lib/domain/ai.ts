@@ -5,8 +5,9 @@ export interface AiOptionView {
   key: "A" | "B" | "C";
   title: string;
   singles: string[];
-  release: string;
-  show: string;
+  release: string | null;
+  releaseName: string;
+  show: string | null;
   showName: string;
   weeks: number;
   total: number;

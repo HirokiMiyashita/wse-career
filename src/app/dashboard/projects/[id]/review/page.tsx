@@ -3,15 +3,23 @@ import { fmt, ymd } from "@/lib/domain/calc";
 import { getProjectOr404 } from "@/server/queries";
 import { Pill } from "@/components/app/ui";
 import { Button } from "@/components/ui/button";
+import { ReviewForm } from "@/components/project/review-form";
 
 export default async function ProjectReviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { project: p, artist } = await getProjectOr404(id);
   const r = p.review;
+  if (!r && p.phase >= 3)
+    return (
+      <ReviewForm
+        projectId={p.id}
+        goals={p.goals.map((g) => ({ id: g.id, label: g.label, target: g.target, unit: g.unit, pillarName: g.pillar ? (artist.plan.pillars.find((x) => x.id === g.pillar)?.name ?? null) : null }))}
+      />
+    );
   if (!r)
     return (
       <section className="rounded-xl border bg-card p-5 shadow-xs">
-        <b>本番のあとに記録します</b>
+        <b>実行中になると記録できます</b>
         <div className="mb-3.5 mt-1.5 text-[13px] text-slate-500">目標ごとの結果、うまくいったこと・課題・次に活かすことを記録すると、柱の数値が更新され、次のキャリアレビューの議題に入ります。</div>
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">

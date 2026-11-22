@@ -64,7 +64,8 @@ export function NewProjectDialog({ artists, artistId, step: initialStep, idea, o
           .filter((g) => g.key.endsWith("0"))
           .map((g) => ({ label: g.k.label, now: g.k.now, target: targets[g.key] ?? suggested(g.k.now, g.k.target), unit: g.k.unit, pillar: g.pillar })),
       });
-      toast("企画を作成しました（協議中の下書き）");
+      if (mode === "template") await client.projects.applyPlan({ projectId: r.id, option: "A", source: "template" });
+      toast(mode === "template" ? "企画を作成し、標準テンプレートから計画を作りました（協議中の下書き）" : "企画を作成しました（協議中の下書き）");
       onClose();
       router.push(`/dashboard/projects/${r.id}`);
       router.refresh();
@@ -193,7 +194,7 @@ export function NewProjectDialog({ artists, artistId, step: initialStep, idea, o
             </div>
             <div className="rounded-xl border p-4">
               <b>テンプレートから作る</b>
-              <p className="mb-3 mt-1.5 text-[12.5px] text-slate-500">「アルバム＋ワンマン」などの標準の流れから作る</p>
+              <p className="mb-3 mt-1.5 text-[12.5px] text-slate-500">選んだ種類（作品・ライブ）の標準の流れから、日程・担当・予算・タスクを作る</p>
               <Button size="sm" variant="outline" disabled={saving} onClick={() => finish("template")}>
                 作成する
               </Button>

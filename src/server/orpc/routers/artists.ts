@@ -1,24 +1,17 @@
-import { ORPCError } from "@orpc/server";
 import { z } from "zod";
 import { addDays, today } from "@/lib/domain/calc";
 import { ARTIST_COLORS } from "@/lib/domain/constants";
 import type { Artist, PillarKey, Project } from "@/lib/domain/types";
-import { db, nextId } from "@/server/store/store";
+import { getArtist, insertApproval, insertArtist, insertProject, listArtists, mutateArtist, newId } from "@/server/repo";
 import { authedProcedure } from "../base";
 
 const pillarKey = z.enum(["work", "live", "fan", "base"]);
 const scopeLevel = z.enum(["提供", "個別協議", "担当外"]);
 
-export function findArtist(id: string): Artist {
-  const a = db().artists.find((x) => x.id === id);
-  if (!a) throw new ORPCError("NOT_FOUND", { message: "アーティストが見つかりません" });
-  return a;
-}
-
 export const artistsRouter = {
-  list: authedProcedure.handler(() => db().artists),
+  list: authedProcedure.handler(({ context }) => listArtists(context.supabase)),
 
-  get: authedProcedure.input(z.object({ id: z.string() })).handler(({ input }) => findArtist(input.id)),
+  get: authedProcedure.input(z.object({ id: z.string() })).handler(({ input, context }) => getArtist(context.supabase, input.id)),
 
   /** 新しいアーティストとキャリアプラン（下書き）を作成 */
   create: authedProcedure
@@ -44,15 +37,16 @@ export const artistsRouter = {
         reviewDate: z.string(),
       }),
     )
-    .handler(({ input }) => {
-      const d = db();
-      const id = nextId("a");
+    .handler(async ({ input, context }) => {
+      const sb = context.supabase;
+      const existing = await listArtists(sb);
+      const id = newId("a");
       const horizonYear = Number(today().slice(0, 4)) + input.years;
-      d.artists.push({
+      const artist: Artist = {
         id,
         name: input.name,
         role: [input.role, input.base].filter(Boolean).join("／"),
-        color: ARTIST_COLORS[(d.artists.length - 3 + ARTIST_COLORS.length) % ARTIST_COLORS.length],
+        color: ARTIST_COLORS[existing.length % ARTIST_COLORS.length],
         plan: {
           horizon: `${horizonYear}年末`,
           years: input.years,
@@ -66,10 +60,11 @@ export const artistsRouter = {
           scope: input.scope,
           memo: input.memo,
         },
-      });
+      };
+      await insertArtist(sb, artist);
       let projectId: string | null = null;
       if (input.firstProject.make) {
-        projectId = nextId("P");
+        projectId = newId("P");
         const fan = input.pillars.find((p) => p.id === "fan")?.kpis[0];
         const step = input.steps[0];
         const project: Project = {
@@ -94,10 +89,10 @@ export const artistsRouter = {
           pillars: step.focus,
           why: `${step.label}のステップ「${step.text}」の最初の企画。`,
         };
-        d.projects.push(project);
+        await insertProject(sb, project);
       }
-      d.approvals.unshift({
-        id: nextId("A"),
+      await insertApproval(sb, {
+        id: newId("A"),
         kind: "plan",
         projectId: null,
         artistId: id,
@@ -122,8 +117,8 @@ export const artistsRouter = {
         nextReview: z.string(),
       }),
     )
-    .handler(({ input }) => {
-      const a = findArtist(input.artistId);
+    .handler(async ({ input, context }) => {
+      await mutateArtist(context.supabase, input.artistId, (a) => {
       a.plan.reviews.unshift({
         date: today(),
         kind: "キャリアレビュー",
@@ -133,21 +128,23 @@ export const artistsRouter = {
         nextActions: input.nextActions.length ? input.nextActions : ["—"],
       });
       a.plan.nextReview = input.nextReview || addDays(today(), 90);
+      });
       return { ok: true };
     }),
 
   /** ロードマップに構想中の企画を追加 */
   addIdea: authedProcedure
     .input(z.object({ artistId: z.string(), title: z.string().min(1), pillars: z.array(pillarKey), step: z.number().int().min(0) }))
-    .handler(({ input }) => {
-      const a = findArtist(input.artistId);
-      if (a.plan.ideas.some((x) => x.title === input.title)) return { added: false };
-      a.plan.ideas.push({
-        id: nextId("I"),
-        step: Math.min(input.step, a.plan.steps.length - 1),
-        title: input.title,
-        pillars: input.pillars as PillarKey[],
-      });
-      return { added: true };
-    }),
+    .handler(({ input, context }) =>
+      mutateArtist(context.supabase, input.artistId, (a) => {
+        if (a.plan.ideas.some((x) => x.title === input.title)) return { added: false };
+        a.plan.ideas.push({
+          id: newId("I"),
+          step: Math.min(input.step, a.plan.steps.length - 1),
+          title: input.title,
+          pillars: input.pillars as PillarKey[],
+        });
+        return { added: true };
+      }),
+    ),
 };

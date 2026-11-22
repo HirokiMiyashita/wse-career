@@ -21,6 +21,7 @@ export interface AiProjectInfo {
   title: string;
   artistId: string;
   hasPlan: boolean;
+  hasLive: boolean;
 }
 type Msg = { role: "user"; text: string } | { role: "ai"; blocks: AiBlock[] };
 
@@ -42,10 +43,10 @@ export function AiPanel({ artists, projects }: { artists: AiArtistInfo[]; projec
   const contextLabel = project ? `企画：${project.title}` : artist ? `${artist.name} のキャリアプラン` : "全体";
 
   const chips: string[] = (() => {
-    if (project && !project.hasPlan) return project.id === "P2" ? ["進め方の案を3つ出して", "初ワンマンの規模は250人で無理がない？"] : ["この企画の進め方の案を出して"];
+    if (project && !project.hasPlan) return ["この企画の進め方の案を3つ出して", ...(project.hasLive ? ["このライブの規模で無理がない？"] : [])];
     if (project) return ["この企画の目標は、キャリアのゴールに対して妥当？", "遅れているタスクの影響は？"];
     if (artist) {
-      const draft = projects.find((p) => p.artistId === artist.id && !p.hasPlan && p.id === "P2");
+      const draft = projects.find((p) => p.artistId === artist.id && !p.hasPlan);
       return [
         ...(draft ? [`「${draft.title}」の進め方の案を3つ出して`] : []),
         `${artist.nextStepLabel ?? "次"}のステップに向けて、どんな企画が考えられる？`,
@@ -213,21 +214,34 @@ function Block({
                 案{o.key}：{o.title}
               </b>
               <dl className="my-2 grid grid-cols-[84px_1fr] gap-x-2 gap-y-0.5 text-xs">
-                <dt className="text-muted-foreground">先行曲</dt>
-                <dd>{o.singles.map(md).join("・")}</dd>
-                <dt className="text-muted-foreground">EP発売</dt>
-                <dd>{ymd(o.release)}</dd>
-                <dt className="text-muted-foreground">ライブ</dt>
-                <dd>
-                  {ymd(o.show)}・{o.showName}
-                </dd>
-                <dt className="text-muted-foreground">告知期間</dt>
-                <dd>{o.weeks}週間</dd>
+                {o.singles.length > 0 && (
+                  <>
+                    <dt className="text-muted-foreground">先行曲</dt>
+                    <dd>{o.singles.map(md).join("・")}</dd>
+                  </>
+                )}
+                {o.release && (
+                  <>
+                    <dt className="text-muted-foreground">{o.releaseName}発売</dt>
+                    <dd>{ymd(o.release)}</dd>
+                  </>
+                )}
+                {o.show && (
+                  <>
+                    <dt className="text-muted-foreground">ライブ</dt>
+                    <dd>
+                      {ymd(o.show)}・{o.showName}
+                    </dd>
+                    <dt className="text-muted-foreground">告知期間</dt>
+                    <dd>{o.weeks}週間</dd>
+                  </>
+                )}
                 <dt className="text-muted-foreground">予算</dt>
                 <dd>{man(o.total)}</dd>
                 <dt className="text-muted-foreground">ゴールへの効き方</dt>
                 <dd>
-                  月間リスナー {o.listenersTarget.toLocaleString("ja-JP")}人想定（ゴールの{o.goalShare}%）／必要転換率 {o.required.toFixed(2)}%
+                  月間リスナー {o.listenersTarget.toLocaleString("ja-JP")}人想定{o.goalShare ? `（ゴールの${o.goalShare}%）` : ""}
+                  {o.show ? `／必要転換率 ${o.required.toFixed(2)}%` : ""}
                 </dd>
               </dl>
               <div className="mb-2 rounded-md bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600">{o.risk}</div>

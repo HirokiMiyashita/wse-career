@@ -13,7 +13,7 @@ export default async function ArtistSongsPage({ params }: { params: Promise<{ id
       <Note tone="warn" className="mb-3">
         「買い切り」の範囲は契約によって異なります。独占利用・著作権・原盤・印税分配を一括で取得したと推定せず、項目ごとに確認します。
       </Note>
-      <Panel title={`収録候補（${songs.length}曲）`} action={<Link href="/dashboard/projects/P1" className="text-xs text-primary">企画を開く</Link>}>
+      <Panel title={`収録候補（${songs.length}曲）`} action={<Link href={`/dashboard/artists/${id}`} className="text-xs text-primary">キャリアプランを開く</Link>}>
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>

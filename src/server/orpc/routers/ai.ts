@@ -3,13 +3,13 @@ import type { AiBlock } from "@/lib/domain/ai";
 import { fmt, isLate, pillarProgress, today } from "@/lib/domain/calc";
 import { PEOPLE, WORKSTREAMS } from "@/lib/domain/constants";
 import type { Artist, PillarKey, Project } from "@/lib/domain/types";
-import { NOA_OPTIONS, optionSummary } from "@/server/store/plan-generator";
-import { db } from "@/server/store/store";
+import { buildOptions, optionSummary, projectShape, type OptionKey } from "@/server/store/plan-generator";
+import { getArtist, getProject, listApprovals, listArtists, listProjects } from "@/server/repo";
+import type { Approval } from "@/lib/domain/types";
 import { authedProcedure } from "../base";
-import { findProject } from "./projects";
 
 /**
- * AI 企画相談（デモ版）。
+ * AI 企画相談（試作版）。
  * 決まった質問にだけ、社内データ（キャリアプラン・企画・ナレッジ）から組み立てた回答を返す。
  * 実装時はここで LLM API を呼び、同じ AiBlock 形式で返す。
  */
@@ -26,45 +26,70 @@ const IDEAS: Record<string, { title: string; pillars: PillarKey[]; reason: strin
   ],
 };
 
-function planOptions(projectId: string): AiBlock[] {
+function planOptions(p: Project, artist: Artist, now: string): AiBlock[] {
+  const step = artist.plan.steps[p.step] ?? artist.plan.steps[0];
+  const fanKpi = artist.plan.pillars.find((x) => x.id === "fan")?.kpis[0];
+  const { listenersGoal } = projectShape(p);
+  const listenersNow = listenersGoal?.now ?? fanKpi?.now ?? 0;
   return [
-    { type: "text", text: "2028年のゴール「東京でライブに定評のあるシンガーとして、固定客でワンマンを続けられている」に向けた最初のステップとして考えました。いまの月間リスナーは9,000人、本人の過去のライブ転換率は0.8%です。" },
+    {
+      type: "text",
+      text: `${artist.plan.horizon}のゴール「${artist.plan.vision}」に向けた、${step.label}のステップ「${step.text}」の企画として考えました。いまの月間リスナーは${fmt(listenersNow)}人です。`,
+    },
     {
       type: "options",
-      projectId,
-      options: NOA_OPTIONS.map((o) => {
-        const s = optionSummary(o);
+      projectId: p.id,
+      options: buildOptions(p, artist, now).map((o) => {
+        const s = optionSummary(o, p, now);
         return {
           key: o.key,
           title: o.title,
           singles: o.singles,
           release: o.release,
+          releaseName: o.releaseName,
           show: o.show,
           showName: o.showName,
           weeks: s.weeks,
           total: s.total,
           required: s.required,
           listenersTarget: o.listenersTarget,
-          goalShare: Math.round((o.listenersTarget / 30000) * 100),
+          goalShare: fanKpi?.target ? Math.round((o.listenersTarget / fanKpi.target) * 100) : 0,
           risk: o.risk,
         };
       }),
     },
-    { type: "note", text: "どれを採るかは社内で判断してください。" },
+    { type: "note", text: "どれを採るかは社内で判断してください。選んだ案は「協議」の下書きとして企画に入り、共同承認で確定します。" },
   ];
 }
 
-function answer(q: string, artist: Artist | null, project: Project | null): AiBlock[] {
+interface Ctx {
+  artist: Artist | null;
+  project: Project | null;
+  projects: Project[];
+  artists: Artist[];
+  approvals: Approval[];
+}
+
+function answer(q: string, { artist, project, projects, artists, approvals }: Ctx): AiBlock[] {
   const now = today();
-  const isNoaPlan = project?.id === "P2" || (!project && artist?.id === "noa");
   if (/進め方の案/.test(q)) {
-    if (isNoaPlan) return planOptions("P2");
-    return [{ type: "text", text: "デモでは、進め方の案の比較は NOA（仮）の「2nd EPリリースと東京ワンマン」で試せます。実装時は、どの企画でも目標・過去の実績・標準テンプレートから案を作ります。" }];
+    const target = project ?? (artist ? (projects.find((p) => p.artistId === artist.id && !p.tasks.length && p.phase < 2) ?? null) : null);
+    const targetArtist = target ? (artists.find((a) => a.id === target.artistId) ?? null) : null;
+    if (target && targetArtist) {
+      if (target.phase >= 2) return [{ type: "text", text: "この企画はすでに共同承認に進んでいます。計画の変更は「変更を記録」から行ってください。" }];
+      return planOptions(target, targetArtist, now);
+    }
+    return [{ type: "text", text: "進め方の案を出す企画を開いてから、もう一度お試しください。" }];
   }
-  if (/規模|250人/.test(q)) {
+  if (/規模|無理がない/.test(q) && project) {
+    const { liveGoal, listenersGoal } = projectShape(project);
+    if (!liveGoal) return [{ type: "text", text: "この企画にはライブの動員目標がありません。" }];
+    const record = project.model.record ?? 1.0;
+    const need = Math.round(liveGoal.target / (record / 100));
+    const nowL = listenersGoal?.now ?? 0;
     return [
-      { type: "text", text: "キャパ250人を満員にするには、本人の過去実績（転換率0.8%）なら月間リスナー約31,000人が必要です。いまは9,000人なので、EP期間中に3倍以上に伸ばす前提になります。" },
-      { type: "text", text: "案C（リリースパーティー150人）で手応えを測ってから250人に進む段階型の方が、ゴール「固定客でワンマンを続ける」には確実かもしれません。" },
+      { type: "text", text: `キャパ${fmt(liveGoal.target)}人を満員にするには、ライブ転換率${record}%なら月間リスナー約${fmt(need)}人が必要です。いまは${fmt(nowL)}人${nowL ? `なので、企画の期間中に約${(need / nowL).toFixed(1)}倍に伸ばす前提になります` : "です"}。` },
+      { type: "text", text: need > nowL * 2 ? "伸びが大きい前提なので、小さめの会場で手応えを測る段階型（案C）も検討の余地があります。" : "いまのリスナー数から見て、無理の少ない規模です。" },
     ];
   }
   if (/どんな企画/.test(q) && artist) {
@@ -113,7 +138,7 @@ function answer(q: string, artist: Artist | null, project: Project | null): AiBl
     ];
   }
   if (/優先/.test(q)) {
-    const pending = db().approvals.filter((a) => !(a.ws && a.artist)).sort((a, b) => a.due.localeCompare(b.due));
+    const pending = approvals.filter((a) => !(a.ws && a.artist)).sort((a, b) => a.due.localeCompare(b.due));
     return [
       { type: "text", text: "期限の近い順に、判断待ちを並べました。期限を過ぎているものから進めるのがよさそうです。" },
       { type: "list", items: pending.slice(0, 4).map((a) => `${a.due.slice(5).replace("-", "/")}まで：${a.title}`) },
@@ -123,46 +148,47 @@ function answer(q: string, artist: Artist | null, project: Project | null): AiBl
     return [
       {
         type: "list",
-        items: db().artists.map((a) => {
+        items: artists.map((a) => {
           const weak = [...a.plan.pillars].sort((x, y) => pillarProgress(x) - pillarProgress(y))[0];
           return `${a.name}：一番進んでいない柱は「${weak.name}」（${Math.round(pillarProgress(weak) * 100)}%）`;
         }),
       },
     ];
   }
-  return [{ type: "text", text: "デモ版のため、決まった質問にだけ答えます。実装時は、キャリアプラン・企画・振り返り・業務ルールを参照して回答を作ります。" }];
+  return [{ type: "text", text: "試作版のため、決まった質問（下の候補）にだけ答えます。今後、キャリアプラン・企画・振り返り・業務ルールを参照して回答を作れるようにします。" }];
 }
 
 export const aiRouter = {
   ask: authedProcedure
     .input(z.object({ question: z.string().min(1), artistId: z.string().optional(), projectId: z.string().optional() }))
-    .handler(({ input }) => {
-      const d = db();
-      const project = input.projectId ? (d.projects.find((p) => p.id === input.projectId) ?? null) : null;
+    .handler(async ({ input, context }) => {
+      const sb = context.supabase;
+      const [artists, projects, approvals] = await Promise.all([listArtists(sb), listProjects(sb), listApprovals(sb)]);
+      const project = input.projectId ? (projects.find((p) => p.id === input.projectId) ?? null) : null;
       const artistId = project?.artistId ?? input.artistId;
-      const artist = artistId ? (d.artists.find((a) => a.id === artistId) ?? null) : null;
-      return { blocks: answer(input.question, artist, project) };
+      const artist = artistId ? (artists.find((a) => a.id === artistId) ?? null) : null;
+      return { blocks: answer(input.question, { artist, project, projects, artists, approvals }) };
     }),
 
   /** 採用前のプレビュー（日程・担当・予算・注意点） */
   preview: authedProcedure
     .input(z.object({ projectId: z.string(), option: z.enum(["A", "B", "C"]) }))
-    .handler(({ input }): { blocks: AiBlock[] } => {
-      findProject(input.projectId);
-      const o = NOA_OPTIONS.find((x) => x.key === input.option)!;
-      const s = optionSummary(o);
+    .handler(async ({ input, context }): Promise<{ blocks: AiBlock[] }> => {
+      const now = today();
+      const p = await getProject(context.supabase, input.projectId);
+      const artist = await getArtist(context.supabase, p.artistId);
+      const o = buildOptions(p, artist, now).find((x) => x.key === (input.option as OptionKey))!;
+      const s = optionSummary(o, p, now);
       const kinds: Record<string, string> = { ws: "WS", artist: "本人", ext: "外部", joint: "共同", tbd: "未指定" };
       const byKind: Record<string, number> = {};
       s.plan.tasks.forEach((t) => {
         const k = PEOPLE[t.exec]?.kind ?? "artist";
         byKind[k] = (byKind[k] ?? 0) + 1;
       });
-      const warnings = [
-        "担当（ステータスを管理する従業員）は、反映後にタスク画面で割り当ててください",
-        "ライブ物販はWSの標準業務外のため「個別協議」にしました",
-        "外部流通の提携先が未確定のため、配信登録の担当は「提携先 未確定」です",
-      ];
-      if (s.weeks < 8) warnings.push(`告知期間が${s.weeks}週と、目安（8〜10週）より短めです`);
+      const warnings = ["担当（ステータスを管理する従業員）は、反映後にタスク画面で割り当ててください"];
+      if (s.plan.tasks.some((t) => t.scope === "個別協議")) warnings.push("ライブ物販はWSの標準業務外のため「個別協議」にしました");
+      if (s.plan.tasks.some((t) => t.exec === "dist")) warnings.push("外部流通の提携先が未確定のため、配信登録の実行は「提携先 未確定」です");
+      if (s.weeks && s.weeks < 8) warnings.push(`告知期間が${s.weeks}週と、目安（8〜10週）より短めです`);
       return {
         blocks: [
           { type: "text", text: `案${o.key}を、日程・担当・予算・タスクに展開しました（下書き）。` },

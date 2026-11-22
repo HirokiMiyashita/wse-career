@@ -5,6 +5,7 @@ import { AiButton } from "@/components/app/ai-button";
 import { TabsNav } from "@/components/app/tabs-nav";
 import { PageHeader, PhasePill, Tag } from "@/components/app/ui";
 import { ChangeButton } from "@/components/project/change-dialog";
+import { PhaseButton } from "@/components/project/phase-button";
 import { cn } from "@/lib/utils";
 
 export default async function ProjectLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
@@ -29,6 +30,7 @@ export default async function ProjectLayout({ children, params }: { children: Re
           <>
             <AiButton />
             <ChangeButton project={p} />
+            <PhaseButton projectId={p.id} phase={p.phase} hasPlan={p.tasks.length > 0} />
           </>
         }
       />

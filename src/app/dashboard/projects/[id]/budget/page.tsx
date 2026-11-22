@@ -6,7 +6,7 @@ import { NoPlan } from "@/components/project/no-plan";
 export default async function BudgetPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { project: p } = await getProjectOr404(id);
-  if (!p.budget.length) return <NoPlan />;
+  if (!p.budget.length) return <NoPlan projectId={p.id} />;
   const cats = [...new Set(p.budget.map((b) => b.category))];
   const total = budgetSum(p, "plan");
   const committed = budgetSum(p, "committed");

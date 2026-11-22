@@ -38,8 +38,8 @@ export default async function DashboardLayout({
           artists={artists.map((a) => ({ id: a.id, name: a.name, color: a.color, label: a.plan.status === "下書き" ? "下書き" : a.plan.horizon.slice(0, 4) }))}
         />
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex items-center justify-between gap-3 border-b border-amber-200/70 bg-amber-50 px-4 py-1.5 text-xs text-amber-900 md:px-8">
-            <span>デモ版：表示している数値・案件・担当はサンプルです（サーバー再起動で元に戻ります）</span>
+          <header className="flex items-center justify-between gap-3 border-b bg-card px-4 py-1.5 text-xs text-muted-foreground md:px-8">
+            <span>AI相談は試作版です（決まった質問と標準テンプレートで回答します）</span>
             <span className="flex items-center gap-3">
               <span className="hidden sm:inline">
                 {ymd(now)}（{weekday(now)}）
@@ -56,7 +56,7 @@ export default async function DashboardLayout({
       </div>
       <AiPanel
         artists={artists.map((a) => ({ id: a.id, name: a.name, horizon: a.plan.horizon, nextStepLabel: a.plan.steps[1]?.label ?? null }))}
-        projects={projects.map((p) => ({ id: p.id, title: p.title, artistId: p.artistId, hasPlan: p.tasks.length > 0 }))}
+        projects={projects.map((p) => ({ id: p.id, title: p.title, artistId: p.artistId, hasPlan: p.tasks.length > 0, hasLive: p.goals.some((g) => g.pillar === "live" && g.unit === "人") }))}
       />
     </ToastProvider>
   );

@@ -42,7 +42,8 @@ src/lib/domain/        型・定数・計算（画面とサーバーで共通。
   calc.ts              日付・進み具合・計画チェック・変更の判定
   agenda.ts            キャリアレビューの議題の自動作成
   ai.ts                AI の回答ブロックの型
-src/server/store/      仮のデータストア（メモリ上）とサンプルデータ、進め方の案のテンプレート
+src/server/repo.ts     業務データの読み書き（Supabase）
+src/server/store/      進め方の案のテンプレート（plan-generator.ts）と、ローカル用サンプルデータ（seed.ts）
 src/server/orpc/routers/
   artists.ts           一覧・取得・作成（下書き）・レビュー記録・構想の追加
   projects.ts          一覧・取得・作成・タスク更新・変更の記録・AI案の反映
@@ -55,10 +56,11 @@ src/components/{home,artist,project,approvals}/   画面ごとの部品
 
 ### いまの制約と次の一手
 
-- **データはメモリ上**（`src/server/store`）。開発サーバーを再起動するとサンプルデータに戻る。
-  次は Supabase にテーブルを作り、`routers/*.ts` の `db()` 呼び出しをクエリに置き換える（型は `src/lib/domain/types.ts` を基準にする）。
-- **AI はデモ版**。`routers/ai.ts` で LLM API を呼び、同じ `AiBlock` 形式で返せば画面はそのまま使える。
-- 「テンプレートから作る」「ゴールの編集」はまだ実装していない（ボタンは案内のみ）。
+- **データは Supabase に保存**（`supabase/migrations/20261123100000_business_data.sql`）。アーティストと企画は中身を jsonb で持ち、`src/server/repo.ts` の `mutateArtist` / `mutateProject` が version を確認して保存する（同時編集の上書きを防ぐ）。
+  ローカルのサンプルデータは `supabase/seed.sql`（`npx tsx scripts/generate-seed.ts` で `src/server/store/seed.ts` から生成）。本番には入らない。
+- **AI は試作版**。決まった質問に答え、進め方の案は標準テンプレート（`src/server/store/plan-generator.ts`）から作る。`routers/ai.ts` で LLM API を呼び、同じ `AiBlock` 形式で返せば画面はそのまま使える。
+- 企画の段階は、企画画面右上のボタンで進める（協議 → 共同承認は判断待ちを作り、本人＋WSの確認で実行中になる）。振り返りを記録すると、結果がキャリアプランの柱の数値とナレッジに反映される。
+- 「ゴールの編集」「キャリアプランの編集」「タスク・予算の追加削除」はまだ実装していない。
 - 変更の判定基準（10万円・14日など）は仮の値。`src/lib/domain/calc.ts` の `isImportantChange` で調整する。
 
 ## 技術スタック

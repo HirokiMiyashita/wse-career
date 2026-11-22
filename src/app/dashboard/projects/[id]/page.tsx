@@ -39,7 +39,6 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
   const n = nextMilestone(p, now);
   const apv = approvals.filter((a) => a.projectId === p.id && !(a.ws && a.artist));
   const checks = planChecks(p, now);
-  if (p.id === "P1") checks.push({ level: "wa", text: "収録曲のうち権利の確認が残っている曲があります（楽曲タブ）" });
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
@@ -94,7 +93,7 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
             </div>
           </Panel>
         ) : (
-          <NoPlan />
+          <NoPlan projectId={p.id} />
         )}
       </div>
       <div className="grid content-start gap-4">
