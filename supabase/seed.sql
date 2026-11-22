@@ -1,0 +1,1 @@
+-- `supabase db reset` 実行時に投入される初期データ
