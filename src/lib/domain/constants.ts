@@ -1,7 +1,7 @@
 import type { Lever, Person, ScopeLevel, TaskStatus, WorkstreamKey } from "./types";
 
 export const PEOPLE: Record<string, Person> = {
-  ws: { key: "ws", name: "WS代表", org: "WS", kind: "ws" },
+  ws: { key: "ws", name: "WS（社内）", org: "WS", kind: "ws" },
   joint: { key: "joint", name: "本人＋WS", org: "共同", kind: "joint" },
   artist: { key: "artist", name: "本人", org: "本人", kind: "artist" },
   eng: { key: "eng", name: "録音・MIXエンジニア", org: "外部", kind: "ext" },
@@ -11,9 +11,12 @@ export const PEOPLE: Record<string, Person> = {
   dist: { key: "dist", name: "外部流通（提携先 未確定）", org: "外部", kind: "ext" },
   live: { key: "live", name: "ライブ制作", org: "外部", kind: "ext" },
   pr: { key: "pr", name: "PR担当", org: "外部", kind: "ext" },
-  acct: { key: "acct", name: "経理・契約担当（要指定）", org: "要指定", kind: "tbd" },
+  acct: { key: "acct", name: "経理・契約", org: "要指定", kind: "tbd" },
   none: { key: "none", name: "—", org: "", kind: "none" },
 };
+
+/** 実行タグが外部（アプリに入らない人）か */
+export const isExternalExec = (key: string) => ["ext", "tbd"].includes(PEOPLE[key]?.kind ?? "");
 
 export function personName(key: string, artistName?: string) {
   if (key === "artist") return artistName ?? "本人";

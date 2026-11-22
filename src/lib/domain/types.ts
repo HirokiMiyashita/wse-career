@@ -93,6 +93,9 @@ export interface Task {
   id: string;
   ws: WorkstreamKey;
   title: string;
+  /** 担当：ステータスを管理する従業員（members.id）。アーティストは割り当てない */
+  assignee?: string | null;
+  /** 実行：実際に手を動かす人・外部パートナーのタグ（PEOPLE のキー） */
   exec: string;
   approver: string;
   start: string;

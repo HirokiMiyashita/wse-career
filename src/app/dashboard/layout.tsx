@@ -6,6 +6,7 @@ import { ToastProvider } from "@/components/app/overlay";
 import { Sidebar } from "@/components/app/sidebar";
 import { Button } from "@/components/ui/button";
 import { today, ymd, weekday } from "@/lib/domain/calc";
+import { getCurrentMember, memberName } from "@/server/members";
 import { signOut } from "./actions";
 
 export default async function DashboardLayout({
@@ -19,6 +20,11 @@ export default async function DashboardLayout({
   // proxy.ts でも保護しているが、念のためサーバー側でも確認する
   if (!user) redirect("/login?next=/dashboard");
 
+  // 招待を受けた人は、表示名とパスワードを設定するまで画面に入れない
+  const member = await getCurrentMember();
+  if (!member || member.status === "disabled") redirect("/auth/error?reason=no_member");
+  if (member.status === "invited" || !member.display_name) redirect("/welcome");
+
   const [artists, projects, approvals] = await Promise.all([api.artists.list(), api.projects.list(), api.approvals.list()]);
   const now = today();
 
@@ -26,7 +32,8 @@ export default async function DashboardLayout({
     <ToastProvider>
       <div className="flex min-h-svh flex-col md:flex-row">
         <Sidebar
-          email={user.email ?? null}
+          email={memberName(member)}
+          isAdmin={member.is_admin}
           pending={approvals.filter((a) => !(a.ws && a.artist)).length}
           artists={artists.map((a) => ({ id: a.id, name: a.name, color: a.color, label: a.plan.status === "下書き" ? "下書き" : a.plan.horizon.slice(0, 4) }))}
         />

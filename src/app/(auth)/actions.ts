@@ -48,7 +48,11 @@ export async function signup(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/signup?error=${encodeURIComponent(error.message)}`);
+    // 管理者がいる状態での登録は DB 側（handle_new_user）で拒否される
+    const message = /database error saving new user/i.test(error.message)
+      ? "新規登録は招待制です。管理者からの招待メールのリンクから登録してください。"
+      : error.message;
+    redirect(`/signup?error=${encodeURIComponent(message)}`);
   }
 
   redirect(`/signup/verify?email=${encodeURIComponent(email)}`);

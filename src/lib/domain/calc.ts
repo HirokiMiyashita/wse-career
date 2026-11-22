@@ -49,7 +49,7 @@ export const nextMilestone = (p: Project, now: string) =>
 export function taskInfo(t: Task) {
   const fields: [string, string | undefined][] = [
     ["何をする", t.title],
-    ["誰が実行", t.exec && t.exec !== "acct" ? t.exec : undefined],
+    ["担当", t.assignee ?? undefined],
     ["誰が承認", t.approver],
     ["着手条件", t.trigger],
     ["期限", t.due],
@@ -107,8 +107,12 @@ export function planChecks(p: Project, now: string): { level: "ok" | "wa" | "ng"
         ? { level: "ng", text: `遅れているタスクが${late.length}件（${late.map((t) => t.title).join("、")}）` }
         : { level: "ok", text: "遅れているタスクはありません" },
     );
-    const tbd = p.tasks.filter((t) => t.exec === "acct");
-    if (tbd.length) out.push({ level: "wa", text: `担当者が未指定のタスクが${tbd.length}件（${tbd.map((t) => t.title).join("、")}）` });
+    const unassigned = p.tasks.filter((t) => !t.assignee && t.status !== "完了");
+    if (unassigned.length)
+      out.push({
+        level: "wa",
+        text: `担当（従業員）が未割り当てのタスクが${unassigned.length}件（${unassigned.slice(0, 3).map((t) => t.title).join("、")}${unassigned.length > 3 ? " ほか" : ""}）`,
+      });
     const announce = p.milestones.find((m) => /告知|発表/.test(m.label));
     const show = p.milestones.find((m) => /ワンマン$|パーティー/.test(m.label));
     if (announce && show) {

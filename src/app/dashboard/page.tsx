@@ -5,9 +5,10 @@ import { ArtistAvatar, Bar, PageHeader, Panel, Pill, Tag } from "@/components/ap
 import { Button } from "@/components/ui/button";
 import { NewProjectButton } from "@/components/project/new-project-dialog";
 import { WeeklyTasks } from "@/components/home/weekly-tasks";
+import { getCurrentMember } from "@/server/members";
 
 export default async function DashboardPage() {
-  const [artists, projects, approvals] = await Promise.all([api.artists.list(), api.projects.list(), api.approvals.list()]);
+  const [artists, projects, approvals, me] = await Promise.all([api.artists.list(), api.projects.list(), api.approvals.list(), getCurrentMember()]);
   const now = today();
   const pending = approvals.filter((a) => !(a.ws && a.artist));
   const artistName = (id: string) => artists.find((a) => a.id === id)?.name ?? id;
@@ -20,9 +21,11 @@ export default async function DashboardPage() {
 
   const weekly = projects
     .flatMap((p) => p.tasks.map((t) => ({ t, p })))
-    .filter(({ t }) => ["ws", "joint"].some((k) => t.exec === k || t.approver === k) && t.status !== "完了" && (isLate(t, now) || diffDays(now, t.due) <= 30))
+    .filter(({ t }) => !!me && t.assignee === me.id && t.status !== "完了" && (isLate(t, now) || diffDays(now, t.due) <= 30))
     .sort((a, b) => a.t.due.localeCompare(b.t.due))
     .map(({ t, p }) => ({ projectId: p.id, taskId: t.id, title: t.title, project: p.title, artistName: artistName(p.artistId), artistColor: artists.find((a) => a.id === p.artistId)?.color ?? "#333", due: t.due, late: isLate(t, now) }));
+
+  const unassigned = projects.filter((p) => p.phase < 5).flatMap((p) => p.tasks).filter((t) => !t.assignee && t.status !== "完了").length;
 
   return (
     <>
@@ -86,8 +89,13 @@ export default async function DashboardPage() {
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
-        <Panel title="今週やること" hint="WSが実行・承認に関わるタスク（30日以内と遅れ）">
+        <Panel title="自分の担当" hint="自分が担当のタスク（30日以内と遅れ）">
           <WeeklyTasks items={weekly} />
+          {unassigned > 0 && (
+            <div className="border-t border-slate-100 px-5 py-3 text-[12.5px] text-muted-foreground">
+              担当が未割り当てのタスクが <b className="text-amber-700">{unassigned}件</b> あります。企画のタスク画面で割り当ててください。
+            </div>
+          )}
         </Panel>
         <div className="grid content-start gap-4">
           <Panel title="判断が必要なこと" action={<Link href="/dashboard/approvals" className="text-xs text-primary">すべて</Link>}>

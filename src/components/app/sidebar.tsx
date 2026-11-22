@@ -10,6 +10,7 @@ const ICONS = {
   check: "M9 12l2 2 4-4M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4z",
   grid: "M3 5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM14 5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-3a2 2 0 0 1-2-2zM3 16a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM14 16a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-3a2 2 0 0 1-2-2z",
   book: "M4 4h10a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4zM8 20a2 2 0 0 1 0-4h10",
+  users: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
 };
 export function Icon({ name, className }: { name: keyof typeof ICONS; className?: string }) {
   return (
@@ -26,10 +27,11 @@ export interface NavArtist {
   label: string;
 }
 
-export function Sidebar({ artists, pending, email }: { artists: NavArtist[]; pending: number; email: string | null }) {
+export function Sidebar({ artists, pending, email, isAdmin }: { artists: NavArtist[]; pending: number; email: string | null; isAdmin: boolean }) {
   const pathname = usePathname();
   const item = (href: string, on: boolean, children: React.ReactNode) => (
     <Link
+      key={href}
       href={href}
       className={cn(
         "mb-0.5 flex items-center gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-sm font-medium",
@@ -81,6 +83,16 @@ export function Sidebar({ artists, pending, email }: { artists: NavArtist[]; pen
         )}
         <div className="hidden px-2.5 pb-1.5 pt-4 text-[11px] font-semibold text-muted-foreground md:block">学び</div>
         {item("/dashboard/knowledge", pathname.startsWith("/dashboard/knowledge"), <><Icon name="book" />ナレッジ</>)}
+        <div className="hidden px-2.5 pb-1.5 pt-4 text-[11px] font-semibold text-muted-foreground md:block">設定</div>
+        {item(
+          "/dashboard/members",
+          pathname.startsWith("/dashboard/members"),
+          <>
+            <Icon name="users" />
+            メンバー
+            {isAdmin && <small className="ml-auto text-[11px] text-muted-foreground">招待</small>}
+          </>,
+        )}
       </nav>
       {email && <div className="hidden truncate border-t px-2.5 pt-3 text-xs text-muted-foreground md:block">{email}</div>}
     </aside>

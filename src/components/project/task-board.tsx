@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { client } from "@/lib/orpc/client";
 import { isLate, md, taskInfo } from "@/lib/domain/calc";
-import { BOARD_COLUMNS, PEOPLE, TASK_STATUSES, WORKSTREAMS, WS_NAME, personName } from "@/lib/domain/constants";
+import { BOARD_COLUMNS, PEOPLE, TASK_STATUSES, WORKSTREAMS, WS_NAME, isExternalExec, personName } from "@/lib/domain/constants";
 import type { Project, Task, TaskStatus } from "@/lib/domain/types";
 import { Sheet } from "@/components/app/overlay";
 import { Note, Pill, Tag, TaskStatusPill, statusTone } from "@/components/app/ui";
@@ -12,8 +12,18 @@ import { useAction } from "@/components/app/use-action";
 import { cn } from "@/lib/utils";
 import { ChangeButton } from "./change-dialog";
 
+export interface Assignee {
+  id: string;
+  name: string;
+}
+
+/** 実行タグ：外部パートナーは「外部」と分かるように表示 */
+function ExecTag({ exec, artistName }: { exec: string; artistName: string }) {
+  return <Tag variant={isExternalExec(exec) ? "white" : "default"}>{isExternalExec(exec) ? `外部：${personName(exec)}` : personName(exec, artistName)}</Tag>;
+}
+
 /** タスク：ボード（ドラッグで状態変更）と流れ別リスト、詳細パネル（その場で編集） */
-export function TaskBoard({ project, artistName, now, initialTask }: { project: Project; artistName: string; now: string; initialTask: string | null }) {
+export function TaskBoard({ project, artistName, assignees, now, initialTask }: { project: Project; artistName: string; assignees: Assignee[]; now: string; initialTask: string | null }) {
   const router = useRouter();
   const pathname = usePathname();
   const [view, setView] = useState<"board" | "list">("board");
@@ -22,7 +32,7 @@ export function TaskBoard({ project, artistName, now, initialTask }: { project: 
   const [over, setOver] = useState<TaskStatus | null>(null);
   const { run } = useAction();
   const open = project.tasks.find((t) => t.id === openId) ?? null;
-  const who = (k: string) => personName(k, artistName);
+  const owner = (id: string | null | undefined) => (id ? (assignees.find((a) => a.id === id)?.name ?? "（退出したメンバー）") : null);
 
   function openTask(id: string | null) {
     setOpenId(id);
@@ -85,12 +95,13 @@ export function TaskBoard({ project, artistName, now, initialTask }: { project: 
                   >
                     <div className="flex flex-wrap gap-1">
                       <Tag>{WS_NAME[t.ws]}</Tag>
+                      {isExternalExec(t.exec) && <ExecTag exec={t.exec} artistName={artistName} />}
                       {t.status === "保留" && <Tag variant="dashed">保留</Tag>}
                       {t.group && <Tag variant="primary">まとめて実施</Tag>}
                     </div>
                     <div className="mb-2 mt-1 text-[13px] font-semibold leading-snug">{t.title}</div>
                     <div className="flex items-center justify-between gap-1.5 text-[11.5px] text-slate-500">
-                      <span className={cn(t.exec === "acct" && "text-red-600")}>{who(t.exec)}</span>
+                      <span className={cn(!t.assignee && "text-amber-700")}>{owner(t.assignee) ?? "担当 未割当"}</span>
                       <span className={cn(isLate(t, now) && "font-bold text-red-600")}>
                         {isLate(t, now) ? "遅れ " : ""}
                         {md(t.due)}
@@ -112,7 +123,7 @@ export function TaskBoard({ project, artistName, now, initialTask }: { project: 
           <table className="w-full text-[13px]">
             <thead>
               <tr className="bg-slate-50 text-left text-xs text-muted-foreground">
-                {["タスク", "実行", "承認", "期間", "状態", "必要情報"].map((h) => (
+                {["タスク", "担当", "実行", "承認", "期間", "状態", "必要情報"].map((h) => (
                   <th key={h} className="whitespace-nowrap border-b px-3.5 py-2.5 font-semibold">
                     {h}
                   </th>
@@ -125,7 +136,7 @@ export function TaskBoard({ project, artistName, now, initialTask }: { project: 
                 if (!ts.length) return null;
                 return [
                   <tr key={w.key} className="bg-slate-50">
-                    <td colSpan={6} className="px-3.5 py-2 text-[12.5px] font-bold text-slate-600">
+                    <td colSpan={7} className="px-3.5 py-2 text-[12.5px] font-bold text-slate-600">
                       {w.name}
                       <span className="ml-2.5 font-normal text-muted-foreground">{w.role}</span>
                     </td>
@@ -137,8 +148,11 @@ export function TaskBoard({ project, artistName, now, initialTask }: { project: 
                         <td className="px-3.5 py-2.5">
                           <b>{t.title}</b> {t.group && <Tag variant="primary">まとめて実施</Tag>} {t.scope && <Tag variant="dashed">個別協議</Tag>}
                         </td>
-                        <td className={cn("px-3.5 py-2.5 text-xs", t.exec === "acct" && "text-red-600")}>{who(t.exec)}</td>
-                        <td className="px-3.5 py-2.5 text-xs">{who(t.approver)}</td>
+                        <td className={cn("whitespace-nowrap px-3.5 py-2.5 text-xs", !t.assignee && "text-amber-700")}>{owner(t.assignee) ?? "未割当"}</td>
+                        <td className="px-3.5 py-2.5">
+                          <ExecTag exec={t.exec} artistName={artistName} />
+                        </td>
+                        <td className="px-3.5 py-2.5 text-xs">{personName(t.approver, artistName)}</td>
                         <td className="whitespace-nowrap px-3.5 py-2.5 text-xs">{t.start === t.due ? md(t.due) : `${md(t.start)}〜${md(t.due)}`}</td>
                         <td className="px-3.5 py-2.5">
                           <TaskStatusPill status={t.status} late={isLate(t, now)} due={md(t.due)} />
@@ -155,7 +169,7 @@ export function TaskBoard({ project, artistName, now, initialTask }: { project: 
       )}
 
       <Sheet open={!!open} onClose={() => openTask(null)}>
-        {open && <TaskDetail key={open.id} project={project} task={open} artistName={artistName} now={now} onOpen={openTask} />}
+        {open && <TaskDetail key={open.id} project={project} task={open} artistName={artistName} assignees={assignees} now={now} onOpen={openTask} />}
       </Sheet>
     </>
   );
@@ -168,12 +182,14 @@ const FIELDS: { key: "trigger" | "doneWhen" | "affects" | "onChange"; label: str
   { key: "onChange", label: "変更があったときの対応" },
 ];
 
-function TaskDetail({ project, task: t, artistName, now, onOpen }: { project: Project; task: Task; artistName: string; now: string; onOpen: (id: string) => void }) {
+function TaskDetail({ project, task: t, artistName, assignees, now, onOpen }: { project: Project; task: Task; artistName: string; assignees: Assignee[]; now: string; onOpen: (id: string) => void }) {
   const { run } = useAction();
   const info = taskInfo(t);
-  const save = (patch: Partial<Pick<Task, "title" | "status" | "exec" | "approver" | "start" | "due" | "trigger" | "doneWhen" | "affects" | "onChange">>) =>
+  const save = (patch: Partial<Pick<Task, "title" | "status" | "assignee" | "exec" | "approver" | "start" | "due" | "trigger" | "doneWhen" | "affects" | "onChange">>) =>
     run(() => client.projects.updateTask({ projectId: project.id, taskId: t.id, patch }), "保存しました");
-  const people = Object.values(PEOPLE);
+  const people = Object.values(PEOPLE).filter((p) => p.kind !== "none");
+  const approvers = Object.values(PEOPLE);
+  const assigneeGone = !!t.assignee && !assignees.some((a) => a.id === t.assignee);
   const input = "w-full rounded-lg border bg-white px-2.5 py-1.5 text-sm outline-none focus:border-primary";
   const group = t.group ? project.tasks.filter((x) => x.group === t.group && x.id !== t.id) : [];
 
@@ -202,19 +218,35 @@ function TaskDetail({ project, task: t, artistName, now, onOpen }: { project: Pr
         <Row label="何をする">
           <input className={input} defaultValue={t.title} onBlur={(e) => e.target.value !== t.title && save({ title: e.target.value })} />
         </Row>
+        <Row label="担当（ステータスを管理する従業員）" warn={t.assignee ? undefined : "未割当"}>
+          <select
+            className={cn(input, !t.assignee && "border-amber-300 bg-amber-50/40")}
+            value={t.assignee ?? ""}
+            onChange={(e) => save({ assignee: e.target.value || null })}
+          >
+            <option value="">未割当</option>
+            {assigneeGone && <option value={t.assignee!}>（退出したメンバー）</option>}
+            {assignees.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+          {assignees.length === 0 && <div className="mt-1 text-[11.5px] text-muted-foreground">割り当てられる従業員がいません。メンバー画面から招待してください。</div>}
+        </Row>
         <div className="grid grid-cols-2 gap-2.5">
-          <Row label="誰が実行" warn={t.exec === "acct" ? "要指定" : undefined}>
-            <select className={cn(input, t.exec === "acct" && "border-red-300 bg-red-50/40")} value={t.exec} onChange={(e) => save({ exec: e.target.value })}>
+          <Row label="実行（誰が手を動かすか）">
+            <select className={input} value={t.exec} onChange={(e) => save({ exec: e.target.value })}>
               {people.map((p) => (
                 <option key={p.key} value={p.key}>
-                  {personName(p.key, artistName)}
+                  {isExternalExec(p.key) ? `外部：${personName(p.key)}` : personName(p.key, artistName)}
                 </option>
               ))}
             </select>
           </Row>
           <Row label="誰が承認">
             <select className={input} value={t.approver} onChange={(e) => save({ approver: e.target.value })}>
-              {people.map((p) => (
+              {approvers.map((p) => (
                 <option key={p.key} value={p.key}>
                   {personName(p.key, artistName)}
                 </option>
@@ -254,9 +286,9 @@ function TaskDetail({ project, task: t, artistName, now, onOpen }: { project: Pr
             {t.note}
           </Note>
         )}
-        {t.exec === "acct" && (
-          <Note tone="warn" className="mt-3">
-            経理・契約の実務担当はまだ決まっていません。企画の共同承認までに指定してください。
+        {isExternalExec(t.exec) && (
+          <Note className="mt-3">
+            実行は外部（{personName(t.exec)}）です。外部の人はアプリに入らないので、担当の従業員が進み具合を確認してステータスを更新します。
           </Note>
         )}
         <div className="mt-4">

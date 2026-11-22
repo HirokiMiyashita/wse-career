@@ -20,7 +20,7 @@ export interface WeeklyItem {
 /** チェックを入れるだけで完了にできるタスク一覧 */
 export function WeeklyTasks({ items }: { items: WeeklyItem[] }) {
   const { run } = useAction();
-  if (!items.length) return <div className="px-5 py-10 text-center text-sm text-muted-foreground">今週やることはありません</div>;
+  if (!items.length) return <div className="px-5 py-10 text-center text-sm text-muted-foreground">担当のタスクはありません</div>;
   return (
     <div>
       {items.map((i) => (

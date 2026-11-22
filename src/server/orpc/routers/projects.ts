@@ -74,6 +74,7 @@ export const projectsRouter = {
           .object({
             title: z.string(),
             status: z.enum(["未着手", "進行中", "確認待ち", "完了", "保留"]),
+            assignee: z.uuid().nullable(),
             exec: z.string(),
             approver: z.string(),
             start: z.string(),
@@ -86,9 +87,14 @@ export const projectsRouter = {
           .partial(),
       }),
     )
-    .handler(({ input }) => {
+    .handler(async ({ input, context }) => {
       const task = findProject(input.projectId).tasks.find((t) => t.id === input.taskId);
       if (!task) throw new ORPCError("NOT_FOUND", { message: "タスクが見つかりません" });
+      // 担当に割り当てられるのは従業員だけ
+      if (input.patch.assignee) {
+        const { data: m } = await context.supabase.from("members").select("kind, status").eq("id", input.patch.assignee).maybeSingle();
+        if (!m || m.kind !== "employee" || m.status === "disabled") throw new ORPCError("BAD_REQUEST", { message: "担当に割り当てられるのは従業員だけです" });
+      }
       Object.assign(task, input.patch);
       return task;
     }),
